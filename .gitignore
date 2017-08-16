@@ -1,0 +1,9 @@
+cscope*
+perf.data
+perf.data.old
+hpcount_SRMU
+hpcount_MRMU
+count_buggy
+*.swp
+*.o
+output*
