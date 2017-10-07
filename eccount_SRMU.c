@@ -5,6 +5,8 @@
  * api.h and count_stat.c own to Paul's excellent work at
  * http://kernel.org/pub/linux/kernel/people/paulmck/perfbook/perfbook.html.
  *
+ * Usage: ./eccount_SRMU pperf nreaders nwriters affinity_config_file duration (ms)
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -27,7 +29,7 @@
 extern int global_nwriters; // Defined in counttorture_optimized.h
 
 struct counter{
-    long v __attribute__((__aligned__(CACHE_LINE_SIZE)));
+	long v __attribute__((__aligned__(CACHE_LINE_SIZE)));
 };
 
 struct counter counterA[NR_THREADS] __attribute__((__aligned__(CACHE_LINE_SIZE)));
@@ -48,51 +50,41 @@ void inc_count(long thread_num)
 
 unsigned long read_count(int me)
 {
-    int i;
-    unsigned long sum = 0;
+	int i;
+	unsigned long sum = 0;
 	unsigned long temp = 0;
 
-    // Complement ABflag
-    if (READ_ONCE(ABflag))
-        WRITE_ONCE(ABflag, 0);
-    else
-        WRITE_ONCE(ABflag, 1);
+	// Complement ABflag
+	if (READ_ONCE(ABflag))
+		WRITE_ONCE(ABflag, 0);
+	else
+		WRITE_ONCE(ABflag, 1);
 
-    for (i = 0; i < global_nwriters; i++) {
-        if ( ! READ_ONCE(ABflag) ) {
-            sum += READ_ONCE(counterA[i].v);
-        }
-        else {
-            sum += READ_ONCE(counterB[i].v);
-        }
-    }
+	for (i = 0; i < global_nwriters; i++) {
+		if ( ! READ_ONCE(ABflag) ) {
+			sum += READ_ONCE(counterA[i].v);
+		}
+		else {
+			sum += READ_ONCE(counterB[i].v);
+		}
+	}
 	temp = sum;
-    sum += older_snapshot;
+	sum += older_snapshot;
 	older_snapshot = temp;
-    return sum; 
+	return sum; 
 }
 
 unsigned long final_read_count(void)
 {
-    unsigned long sum = 0;
+	unsigned long sum = 0;
 
-#if 0
-    int i;
-    for (i = 0; i < global_nwriters; i++) {
-        sum += counterA[i].v;
-    }
-    for (i = 0; i < global_nwriters; i++) {
-        sum += counterB[i].v;
-    }
-#else
 	sum = read_count(0);
-#endif
-    return sum;
+	return sum;
 }
 
 void count_init(void)
 {
-    ABflag = 1;
+	ABflag = 1;
 }
 
 void count_cleanup(void)

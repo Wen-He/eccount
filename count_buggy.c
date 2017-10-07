@@ -1,5 +1,9 @@
 /*
- * count_stat.c: Per-thread statistical counters.
+ * count_buggy.c: Sample code to demonstrate miscounts in statistical counters
+ *
+ * Usage:  ./count_buggy pperf nreaders nwriters affinity_config_file duration (ms)
+ * 		e.g.: ./count_buggy pperf 1 14 affinity.cross.conf 3000
+ * Output: check_correctness.data in current directory
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +23,8 @@
  */
 
 #include "api.h"
+
+#define CHECK_CORRECTNESS
 
 DEFINE_PER_THREAD(unsigned long, counter);
 
@@ -40,7 +46,7 @@ unsigned long read_count(int me)
 
 unsigned long final_read_count(void)
 {
-    return read_count(0);
+	return read_count(0);
 }
 
 void count_init(void)

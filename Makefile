@@ -23,7 +23,7 @@ count_buggy: count_buggy.c $(COMMON_DEP)
 	cc $(GCC_ARGS) $(CFLAGS) -o count_buggy count_buggy.c -lpthread
 
 clean:
-	rm -f $(PROGS) cscope.* *.o *.a
+	rm -f $(PROGS) cscope.* *.o *.a *.data
 
 cscope:
 	cscope -bqR

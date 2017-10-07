@@ -1,36 +1,11 @@
 
-/* Lock-free slab memeory allocator for snapshots */
+/* Lock-free slab memeory allocator for snapshots. 
+ * For simplicity, we are using system memory management so far in this sample code.*/
+
 
 #include <stdlib.h>
 #include "eccount_slab.h"
 #include "eccount_MRMU.h"
-
-struct snapshot * eccount_snapshot_malloc( )
-{
-    struct snapshot * sp; 
-
-    sp = (struct snapshot *)calloc(1, sizeof(struct snapshot));
-    if (sp == NULL)
-    {   
-        printf("Error in eccount_snapshot_malloc.\n");
-        return NULL;
-    }   
-
-    sp->counters = (struct counter *)calloc(NR_THREADS, sizeof(struct counter));
-    if (sp->counters == NULL)
-    {   
-        printf("Error in eccount_snapshot_malloc.\n");
-        return NULL;
-    }   
-    return sp; 
-}
-
-void eccount_snapshot_free(struct snapshot * sp) 
-{
-    free(sp->counters);
-    free(sp);
-    return;
-}
 
 #if 0
 volatile unsigned long cur_slice_seq;
@@ -104,3 +79,31 @@ int pcount_slice_free(struct slice * p)
     return 0;
 }
 #endif
+
+struct snapshot * eccount_snapshot_malloc( )
+{
+    struct snapshot * sp; 
+
+    sp = (struct snapshot *)calloc(1, sizeof(struct snapshot));
+    if (sp == NULL)
+    {   
+        printf("Error in eccount_snapshot_malloc.\n");
+        return NULL;
+    }   
+
+    sp->counters = (struct counter *)calloc(NR_THREADS, sizeof(struct counter));
+    if (sp->counters == NULL)
+    {   
+        printf("Error in eccount_snapshot_malloc.\n");
+        return NULL;
+    }   
+    return sp; 
+}
+
+void eccount_snapshot_free(struct snapshot * sp) 
+{
+    free(sp->counters);
+    free(sp);
+    return;
+}
+
