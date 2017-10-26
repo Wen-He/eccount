@@ -40,12 +40,12 @@ unsigned long older_snapshot;
 
 void inc_count(long thread_num)
 {
-    if ( READ_ONCE(ABflag) ) {
+	if ( READ_ONCE(ABflag) ) {
 		WRITE_ONCE(counterA[thread_num].v, READ_ONCE(counterA[thread_num].v) + 1);
-    }
-    else {
+	}
+	else {
 		WRITE_ONCE(counterB[thread_num].v, READ_ONCE(counterB[thread_num].v) + 1);
-    }
+	}
 }
 
 unsigned long read_count(int me)
