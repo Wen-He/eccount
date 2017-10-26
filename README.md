@@ -8,8 +8,8 @@ results without miscounts.
 # Organization
 
 * count_buggy.c: Sample code to demonstrate miscounts in statistical counters.
-* eccount_SRMU.c: Single-reader-multi-updater version of ECCount
-* eccount_MRMU.c: Multi-reader-multi-updater version of ECCount
+* eccount_SRMU.c: Single-reader-multi-updater version of ECCount.
+* eccount_MRMU.c: Multi-reader-multi-updater version of ECCount.
 * counttorture_optimized.h: The framework to test different counters on
   multi-core architectures (A gaint file).
 * affinity.same.conf: Affinity configuration file which tries to allocate
@@ -22,9 +22,28 @@ results without miscounts.
 On most 64-bits machines running Linux, command "make" is enough to build sample
 code and ECCount.
 
+Sample usage:
+	./eccount_SRMU --help
+	./eccount_SRMU pperf 1 16 affinity.same.conf 15000
+
+	./eccount_MRMU --help
+	./eccount_MRMU pperf 1 16 affinity.cross.conf 15000
+
+# Affinity setting
+
+Upon start, eccount first loads the specified affinity setting file, and then
+binds reader threads and updater threads to specified CPU cores, accordingly.
+
+In affinity setting files, the first 16 decimal numbers are used to specified
+CPU id's to run reader threads, and the subsequent 32 numbers are used to
+specified CPU id's to run writer threads.
+
+affinity.same.conf and affinity.cross.conf are by default for the test server
+with two Intel Xeon E5-2609 CPU. Users may need to adjust these two files
+according to their servers' configuration.
+
 # Contact
 
 If you have any questions or suggestions regarding ECCount, please send email to
 junchangwang@gmail.com.
-
 
