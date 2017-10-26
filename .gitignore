@@ -1,8 +1,8 @@
 cscope*
 perf.data
 perf.data.old
-hpcount_SRMU
-hpcount_MRMU
+eccount_SRMU
+eccount_MRMU
 count_buggy
 *.swp
 *.o
