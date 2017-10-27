@@ -3,7 +3,7 @@
 
 This project contains the source code of ECCount, an efficient and consistent counting mechanism, which not only scales on multi-core architectures but also provides accurate counting results without miscounts.
 
-ECCount is realised under GPL v2.
+ECCount is released under GPL v2.
 
 # Organization
 
