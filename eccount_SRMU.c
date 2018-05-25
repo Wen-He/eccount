@@ -1,6 +1,7 @@
 /*
  * eccount_SRMU: Single-reader-multi-updater version of ECCount. Complete 
  * code and documentation can be found at https://github.com/junchangwang.
+ * Test result analysis can be found in Section 5.3 and 5.4 of ECCount paper.
  * 
  * api.h and count_stat.c own to Paul's excellent work at
  * http://kernel.org/pub/linux/kernel/people/paulmck/perfbook/perfbook.html.

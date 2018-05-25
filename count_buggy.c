@@ -1,5 +1,6 @@
 /*
  * count_buggy.c: Sample code to demonstrate miscounts in statistical counters
+ * Test result analysis can be found in Section 5.3 and 5.4 of ECCount paper.
  *
  * Usage:  ./count_buggy pperf nreaders nwriters affinity_config_file duration (ms)
  * 		e.g.: ./count_buggy pperf 1 14 affinity.cross.conf 3000
