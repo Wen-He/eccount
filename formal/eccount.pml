@@ -1,64 +1,83 @@
 
 #define N_WRITER 2
 #define N_READER 2
-#define NUM_SNAPSHOT 4
+#define N_SNAPSHOT 4
 
 typedef snapshot {
 	short timestamp;
 	bool allocated;
-	byte next;
-	short counters[N_WRITER]
+	short next;
+	int counters[N_WRITER]
 }
 
-snapshot snapshots[NUM_SNAPSHOT];
+snapshot snapshots[N_SNAPSHOT];
 
-/* helper functions */
-#define ALLOCATED(sp) snapshots[sp].allocated
-#define NEXT(sp) snapshots[sp].next
+
+typedef reader_info {
+	byte id;
+	int sum;
+	byte timestamp;
+}
+
+reader_info readers[N_READER]
 
 /* global variables */
 byte g_timestamp;
-byte g_updating_snapshot;
-byte g_old_snapshots;
-short g_sum[N_READER]
+short g_updating_snapshot;
+short g_old_snapshots;
+byte stop_flag;
 
 /* Users need to define variable allocated_snapshot_id before using this helper
    function. */
 inline snapshot_malloc( )
 {
 	byte snapshot_ptr = 0;
+	atomic {
 	do
-	:: snapshot_ptr >= NUM_SNAPSHOT -> break;
+	:: (snapshot_ptr >= N_SNAPSHOT) -> 
+		allocated_snapshot_id = -1;
+		break;
 	:: else ->
 		if
-		:: (!ALLOCATED(snapshot_ptr)) ->
-			ALLOCATED(snapshot_ptr) = true;
+		:: ( !(snapshots[snapshot_ptr].allocated) ) ->
+			snapshots[snapshot_ptr].allocated = 1;
 			allocated_snapshot_id = snapshot_ptr;
-			break;
+			goto L1_mal;
 		:: else -> 
-			snapshot_ptr ++;
+			snapshot_ptr = snapshot_ptr + 1;
 		fi
 	od
+L1_mal:	skip;
+	} /* end of atomic */
 }
 
 inline snapshot_free(index)
 {
-	ALLOCATED(index) = false;
-	NEXT(index) = 0;
+	atomic {
+		snapshots[index].timestamp = 0;
+		snapshots[index].allocated = 0;
+		snapshots[index].next = 0;
+		snapshots[index].counters[0] = 0;
+		snapshots[index].counters[1] = 0;
+	}
 }
 
 /* Users need to define variable sum before using this helper function */
 inline sumup_list(tsp)
 {
-	byte ptr = g_old_snapshots;
+	short ptr = g_old_snapshots;
 	do
-	:: ptr >= NUM_SNAPSHOT -> break;
+	:: ptr >= N_SNAPSHOT -> break;
 	:: ptr == -1 -> break;
-	:: (snapshots[ptr].timestamp > tsp) -> break;
 	:: else ->
-		sum = sum + snapshots[ptr].counters[0];
-		sum = sum + snapshots[ptr].counters[1];
-		ptr = snapshots[ptr].next;
+		if
+		:: (snapshots[ptr].timestamp > tsp) -> 
+			ptr = snapshots[ptr].next;
+		:: else ->
+			sum = sum + snapshots[ptr].counters[0];
+			sum = sum + snapshots[ptr].counters[1];
+			ptr = snapshots[ptr].next;
+		fi
 	od
 }
 
@@ -68,18 +87,27 @@ inline sumup_list(tsp)
 proctype writer(byte id)
 {
 	do
-	:: ((g_sum[0] == 0) || (g_sum[1] == 0)) ->
-		snapshots[g_updating_snapshot].counters[id] = 
-			snapshots[g_updating_snapshot].counters[id] + 1; 
+	:: stop_flag -> break;
+	:: else ->
+		snapshots[g_updating_snapshot].counters[id] ++; 
 		skip;
-	:: else -> break;
 	od
 }
 
 proctype reader(byte id)
 {
 	byte allocated_snapshot_id = 0;
-	snapshot_malloc( );
+	atomic {
+		snapshot_malloc( );
+		if
+		:: (allocated_snapshot_id == -1) -> 
+			printf("Error in allocating snapshot.\n");
+		:: else ->
+			printf("Successfully allocate snapshot %d\n",
+				allocated_snapshot_id);
+		fi
+	}
+
 	byte tmp;
 	atomic {
 		tmp = g_updating_snapshot;
@@ -95,9 +123,13 @@ proctype reader(byte id)
 
 	skip;
 
-	short sum;
+	int sum;
 	sumup_list(snapshots[tmp].timestamp);
-	g_sum[id] = sum;
+
+	readers[id].id = id;
+	readers[id].sum = sum;
+	readers[id].timestamp = snapshots[tmp].timestamp;
+
 }
 
 init 
@@ -108,6 +140,8 @@ init
 		snapshots[1].next = -1;
 		snapshots[2].next = -1;
 		snapshots[3].next = -1;
+		g_old_snapshots = -1;
+		snapshots[0].allocated = 1;
 	}
 
 	atomic { run writer(0); run writer(1); }
@@ -118,14 +152,36 @@ init
 	run reader(1);
 	(n == _nr_pr); /* To make sure the two reader requests have finished. */
 
-/*
-	if
-	:: (timestamps[0] < timestamps[1]) ->
-		assert(g_sum[0] <= g_sum[1]);
+	short result_ptr = g_old_snapshots;
+	do
+	:: (result_ptr >= N_SNAPSHOT) -> break;
+	:: (result_ptr == -1) -> break;
 	:: else ->
-		assert(g_sum[1] <= g_sum[0]);
+		printf("Result: %d, %d, %d, %d, %d, %d\n",
+			result_ptr,
+			snapshots[result_ptr].timestamp,
+			snapshots[result_ptr].allocated,
+			snapshots[result_ptr].next,
+			snapshots[result_ptr].counters[0],
+			snapshots[result_ptr].counters[1]);
+		result_ptr = snapshots[result_ptr].next;
+	od
+
+	stop_flag = 1;
+
+	printf("Final result of reader %d. Timestamp: %d, sum: %d\n",
+		readers[0].id, readers[0].timestamp, readers[0].sum);
+	printf("Final result of reader %d. Timestamp: %d, sum: %d\n",
+		readers[1].id, readers[1].timestamp, readers[1].sum);
+
+	if
+	:: (readers[0].timestamp < readers[1].timestamp) ->
+		assert(readers[0].sum < readers[1].sum);
+	:: (readers[0].timestamp > readers[1].timestamp) ->
+		assert(readers[0].sum > readers[1].sum);
+	:: (readers[0].timestamp == readers[1].timestamp) ->
+		assert(readers[0].sum == readers[1].sum);
 	fi
-*/
 }
 
 
@@ -136,7 +192,7 @@ proctype check_list()
 
 	byte ptr = 0;
 	do
-	:: ptr >= NUM_SNAPSHOT -> break;
+	:: ptr >= N_SNAPSHOT -> break;
 	:: else ->
 		printf("NUM %d, Allocated %d, Next %d\n", ptr, snapshots[ptr].allocated, snapshots[ptr].next);
 		ptr++;
@@ -150,7 +206,7 @@ proctype check_list()
 
 	ptr = 0;
 	do
-	:: ptr >= NUM_SNAPSHOT -> break;
+	:: ptr >= N_SNAPSHOT -> break;
 	:: else ->
 		printf("NUM %d, Allocated %d, Next %d\n", ptr, snapshots[ptr].allocated, snapshots[ptr].next);
 		ptr++;
@@ -161,7 +217,7 @@ proctype check_list()
 
 	ptr = 0;
 	do
-	:: ptr >= NUM_SNAPSHOT -> break;
+	:: ptr >= N_SNAPSHOT -> break;
 	:: else ->
 		printf("NUM %d, Allocated %d, Next %d\n", ptr, snapshots[ptr].allocated, snapshots[ptr].next);
 		ptr++;
