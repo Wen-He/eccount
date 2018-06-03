@@ -6,7 +6,7 @@ byte request_cnt
 short counters0[N_WRITER]
 short counters1[N_WRITER]
 short counters2[N_WRITER]
-short timestamps[N_WRITER]
+short timestamps[N_READER]
 short sum[N_READER]
 
 proctype writer(byte id)
