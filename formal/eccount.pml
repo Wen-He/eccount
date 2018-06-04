@@ -95,14 +95,12 @@ inline sumup_list(tsp)
 
 proctype writer(byte id)
 {
-	atomic {
 	do
 	:: stop_flag -> break;
 	:: else ->
 		snapshots[g_updating_snapshot].counters[id] ++; 
 		skip;
 	od
-	} /* end atomic */
 }
 
 proctype reader(byte id)
@@ -203,10 +201,10 @@ init
 	if
 	:: (readers[0].timestamp < readers[1].timestamp) ->
 		assert(readers[0].sum < readers[1].sum);
-	:: (readers[0].timestamp > readers[1].timestamp) ->
+	/* :: (readers[0].timestamp > readers[1].timestamp) ->
 		assert(readers[0].sum > readers[1].sum);
 	:: (readers[0].timestamp == readers[1].timestamp) ->
-		assert(readers[0].sum == readers[1].sum);
+		assert(readers[0].sum == readers[1].sum); */
 	fi
 }
 
