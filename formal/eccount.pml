@@ -1,5 +1,4 @@
 
-
 #define N_WRITER 2
 #define N_READER 2
 #define N_SNAPSHOT 4
@@ -10,16 +9,14 @@ typedef snapshot {
 	short next;
 	int counters[N_WRITER]
 }
-
 snapshot snapshots[N_SNAPSHOT];
 
 /* To record the information of reader processes. */
 typedef reader_info {
 	byte id;
-	byte timestamp; /* Timestamp value when the read request arrives. */
+	byte timestamp; 
 	int sum;
 }
-
 reader_info readers[N_READER];
 
 /* Global variables */
@@ -59,15 +56,17 @@ L1_mal:	skip;
 inline snapshot_free(index)
 {
 	atomic {
-		snapshots[index].timestamp = 0;
-		snapshots[index].allocated = 0;
-		snapshots[index].next = 0;
-		snapshots[index].counters[0] = 0;
-		snapshots[index].counters[1] = 0;
-	}
+	snapshots[index].timestamp = 0;
+	snapshots[index].allocated = 0;
+	snapshots[index].next = 0;
+	snapshots[index].counters[0] = 0;
+	snapshots[index].counters[1] = 0;
+	} /* end of atomic */
 }
 
-/* Users need to define variable *sum* before using this helper function */
+/* Users need to define variable *sum* before using this helper function. *
+ * No primitive *atomic* in this function to simulate interleaving between*
+ * concurrent read and write operations.                                  */
 inline sumup_list(tsp)
 {
 	short ptr = g_old_snapshots;
@@ -106,35 +105,31 @@ proctype writer(byte id)
 proctype reader(byte id)
 {
 	byte allocated_snapshot_id = 0;
-
 	/* Atomically allocate a new snapshot */
 	atomic {
 		snapshot_malloc( );
 		if
 		:: (allocated_snapshot_id == -1) -> 
 			printf("Error in allocating snapshot.\n");
-		/*:: else ->
-			printf("Successfully allocate snapshot %d\n",
-				allocated_snapshot_id); */
+		:: else ->
+			printf("\nSuccessfully allocated a new snapshot.\n");
 		fi
 	}
 
 	byte tmp;
-	/* (1) Swapping snapshots indicated by allocated_snapshot_id and
-	 * g_updating_snapshot, and (2) incrementing timestamp value atomically.
-	 * The primitive *atomic* in Promela is equivalent to the primitive FAA
-	 * and SWAP on real servers. We perform FAA and SWAP in a single atomic
-	 * block to save generated state space. */
-	atomic {
-		tmp = g_updating_snapshot;
-		g_updating_snapshot = allocated_snapshot_id;
-
-		snapshots[tmp].timestamp = g_timestamp;
-		g_timestamp ++;
+	/* Increment timestamp value atomically.  The primitive *atomic* in
+	 * Promela is equivalent to the primitive FAA and in real code.  */
+	atomic { 
+		tmp = g_updating_snapshot; 
+		snapshots[tmp].timestamp = g_timestamp; 
+		g_timestamp ++; 
 	}
 
-	/* Insert the latest snapshot into global linked list */
+	/* Swap the snapshots indicated by g_updating_snapshot and
+	 * allocated_snapshot_id, and then insert the latest snapshot into
+	 * global linked list */
 	atomic {
+		g_updating_snapshot = allocated_snapshot_id;
 		snapshots[tmp].next = g_old_snapshots;
 		g_old_snapshots = tmp;
 	}
@@ -145,11 +140,12 @@ proctype reader(byte id)
 	 * the timestamp value of this read request. */
 	sumup_list(snapshots[tmp].timestamp);
 
-	/* Fill in reader request info, which will be used to print summary. */
-	readers[id].id = id;
-	readers[id].sum = sum;
-	readers[id].timestamp = snapshots[tmp].timestamp;
-
+	/* Fill in reader request info, which will be used in printted summary. */
+	atomic {
+		readers[id].id = id;
+		readers[id].sum = sum;
+		readers[id].timestamp = snapshots[tmp].timestamp;
+	}
 }
 
 init 
@@ -174,8 +170,9 @@ init
 	run reader(1);
 	(n == _nr_pr); /* To make sure the two reader requests have finished. */
 
+	atomic {
 	short result_ptr = g_old_snapshots;
-	printf("Generated snapshots are as follows:\n");
+	printf("\nGenerated snapshots are as follows:\n");
 	do
 	:: (result_ptr >= N_SNAPSHOT) -> break;
 	:: (result_ptr == -1) -> break;
@@ -189,62 +186,27 @@ init
 			snapshots[result_ptr].counters[1]);
 		result_ptr = snapshots[result_ptr].next;
 	od
+	} /* end of atomic */
 
 	/* Stop writers to avoid being overwhelmed by useless states. */
 	stop_flag = 1;
 
+	
+	atomic {
+	printf("\nCounting results are as follows:\n");
 	printf("Final result of reader %d. Timestamp: %d, sum: %d\n",
 		readers[0].id, readers[0].timestamp, readers[0].sum);
 	printf("Final result of reader %d. Timestamp: %d, sum: %d\n",
 		readers[1].id, readers[1].timestamp, readers[1].sum);
-
+	} /* end of atomic */
+	
 	if
 	:: (readers[0].timestamp < readers[1].timestamp) ->
-		assert(readers[0].sum < readers[1].sum);
-	/* :: (readers[0].timestamp > readers[1].timestamp) ->
-		assert(readers[0].sum > readers[1].sum);
-	:: (readers[0].timestamp == readers[1].timestamp) ->
-		assert(readers[0].sum == readers[1].sum); */
+		assert(readers[0].sum <= readers[1].sum);
+	:: (readers[0].timestamp > readers[1].timestamp) ->
+		assert(readers[0].sum >= readers[1].sum);
+	/* timestamp is monotonically incremented. */
+	/* :: else -> break */
 	fi
 }
 
-
-/* Helper function to test if the linked list works. */
-/*
-proctype check_list()
-{
-
-	byte ptr = 0;
-	do
-	:: ptr >= N_SNAPSHOT -> break;
-	:: else ->
-		printf("NUM %d, Allocated %d, Next %d\n", ptr, snapshots[ptr].allocated, snapshots[ptr].next);
-		ptr++;
-	od
-
-	byte allocated_snapshot_id;
-	snapshot_malloc( );
-	byte ptr_buff1 = allocated_snapshot_id;
-	snapshot_malloc( );
-	byte ptr_buff2 = allocated_snapshot_id;
-
-	ptr = 0;
-	do
-	:: ptr >= N_SNAPSHOT -> break;
-	:: else ->
-		printf("NUM %d, Allocated %d, Next %d\n", ptr, snapshots[ptr].allocated, snapshots[ptr].next);
-		ptr++;
-	od
-
-	snapshot_free(ptr_buff1);
-	snapshot_free(ptr_buff2);
-
-	ptr = 0;
-	do
-	:: ptr >= N_SNAPSHOT -> break;
-	:: else ->
-		printf("NUM %d, Allocated %d, Next %d\n", ptr, snapshots[ptr].allocated, snapshots[ptr].next);
-		ptr++;
-	od
-}	
-*/
