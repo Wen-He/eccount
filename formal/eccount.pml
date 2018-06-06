@@ -1,3 +1,30 @@
+/*
+ * eccount.pml: The formal verification of ECCount algorithm, which is
+ * presented in Section 3.4 of ECCount paper. Source code and documentation
+ * of ECCount can be found at https://github.com/junchangwang.
+ * 
+ * Usage:
+ *   - For server with handreds of gigabytes of memory:
+ *       make && ./eccount
+ *   - For server with a few gigabytes of memory:
+ *       spin -a eccount.pml && gcc -O2 -DBITSTATE -o eccount pan.c && ./eccount
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
+ *
+ * Copyright (c) 2018 Junchang Wang, NUPT.
+ */
 
 #define N_WRITER 2
 #define N_READER 2
@@ -34,6 +61,9 @@ byte stop_flag;
 inline snapshot_malloc( )
 {
 	byte snapshot_ptr = 0;
+	/* To simplify the verification, we assume the snapshot allocate
+	 * function is atomic. In real C code, a lock-free allocator should be
+	 * used. */
 	atomic {
 	do
 	:: (snapshot_ptr >= N_SNAPSHOT) -> 
@@ -65,8 +95,8 @@ inline snapshot_free(index)
 }
 
 /* Users need to define variable *sum* before using this helper function. *
- * No primitive *atomic* in this function to simulate interleaving between*
- * concurrent read and write operations.                                  */
+ * No primitive *atomic* in this function because we want to verify interleaving
+ * between concurrent read and write operations.                                  */
 inline sumup_list(tsp)
 {
 	short ptr = g_old_snapshots;
@@ -86,7 +116,6 @@ inline sumup_list(tsp)
 		fi
 	od
 }
-
 
 /*****************************************/
 /***********  ECCount algorithm **********/
@@ -118,7 +147,7 @@ proctype reader(byte id)
 
 	byte tmp;
 	/* Increment timestamp value atomically.  The primitive *atomic* in
-	 * Promela is equivalent to the primitive FAA and in real code.  */
+	 * Promela is equivalent to the primitive FAA in real C code.      */
 	atomic { 
 		tmp = g_updating_snapshot; 
 		snapshots[tmp].timestamp = g_timestamp; 
@@ -127,7 +156,8 @@ proctype reader(byte id)
 
 	/* Swap the snapshots indicated by g_updating_snapshot and
 	 * allocated_snapshot_id, and then insert the latest snapshot into
-	 * global linked list */
+	 * global linked list. The primitive *atomic* in Promela is equivalent
+	 * to the primitive SWAP in real C code.                            */
 	atomic {
 		g_updating_snapshot = allocated_snapshot_id;
 		snapshots[tmp].next = g_old_snapshots;
@@ -135,12 +165,13 @@ proctype reader(byte id)
 	}
 
 	int sum;
-
 	/* Sum up snapshots whose timestamp values are less than or equal to
 	 * the timestamp value of this read request. */
+	/* No primitive *atomic* wrapping this function because we want to verify
+	 * interleaving between concurrent read and write operations. */
 	sumup_list(snapshots[tmp].timestamp);
 
-	/* Fill in reader request info, which will be used in printted summary. */
+	/* Fill in reader request info, which will be used in printting out summary. */
 	atomic {
 		readers[id].id = id;
 		readers[id].sum = sum;
@@ -158,7 +189,7 @@ init
 		snapshots[3].next = -1;
 		g_old_snapshots = -1;
 		/* snapshots[0] is by default assigned to
-		 * global_updating_snapshot. */
+		 * global_updating_snapshot when the system starts. */
 		snapshots[0].allocated = 1;
 	}
 
@@ -170,34 +201,36 @@ init
 	run reader(1);
 	(n == _nr_pr); /* To make sure the two reader requests have finished. */
 
+	/* Print out the info of generated snapshots. */
 	atomic {
-	short result_ptr = g_old_snapshots;
-	printf("\nGenerated snapshots are as follows:\n");
-	do
-	:: (result_ptr >= N_SNAPSHOT) -> break;
-	:: (result_ptr == -1) -> break;
-	:: else ->
-		printf("snapshot id: %d, timestamp: %d, allocated: %d, next snapshot id: %d, counters[0]: %d, counters[1]: %d\n",
-			result_ptr,
-			snapshots[result_ptr].timestamp,
-			snapshots[result_ptr].allocated,
-			snapshots[result_ptr].next,
-			snapshots[result_ptr].counters[0],
-			snapshots[result_ptr].counters[1]);
+		short result_ptr = g_old_snapshots;
+		printf("\nGenerated snapshots are as follows:\n");
+		do
+			:: (result_ptr >= N_SNAPSHOT) -> break;
+		:: (result_ptr == -1) -> break;
+		:: else ->
+			printf("snapshot id: %d, timestamp: %d, allocated: %d, \
+			next snapshot id: %d, counters[0]: %d, counters[1]: %d\n",
+					result_ptr,
+					snapshots[result_ptr].timestamp,
+					snapshots[result_ptr].allocated,
+					snapshots[result_ptr].next,
+					snapshots[result_ptr].counters[0],
+					snapshots[result_ptr].counters[1]);
 		result_ptr = snapshots[result_ptr].next;
-	od
+		od
 	} /* end of atomic */
 
 	/* Stop writers to avoid being overwhelmed by useless states. */
 	stop_flag = 1;
-
 	
+	/* Print out counting results, */
 	atomic {
-	printf("\nCounting results are as follows:\n");
-	printf("Final result of reader %d. Timestamp: %d, sum: %d\n",
-		readers[0].id, readers[0].timestamp, readers[0].sum);
-	printf("Final result of reader %d. Timestamp: %d, sum: %d\n",
-		readers[1].id, readers[1].timestamp, readers[1].sum);
+		printf("\nCounting results are as follows:\n");
+		printf("Final result of reader %d. Timestamp: %d, sum: %d\n",
+				readers[0].id, readers[0].timestamp, readers[0].sum);
+		printf("Final result of reader %d. Timestamp: %d, sum: %d\n",
+				readers[1].id, readers[1].timestamp, readers[1].sum);
 	} /* end of atomic */
 	
 	if
@@ -205,8 +238,6 @@ init
 		assert(readers[0].sum <= readers[1].sum);
 	:: (readers[0].timestamp > readers[1].timestamp) ->
 		assert(readers[0].sum >= readers[1].sum);
-	/* timestamp is monotonically incremented. */
-	/* :: else -> break */
 	fi
 }
 
