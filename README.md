@@ -36,5 +36,5 @@ affinity.same.conf and affinity.cross.conf are by default for author's test serv
 
 # Contact
 
-If you have any questions or suggestions regarding ECCount, please send email to junchangwang@gmail.com.
+If you have any questions or suggestions regarding ECCount, please send email to hewen9712@gmail.com.
 
